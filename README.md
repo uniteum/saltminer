@@ -229,61 +229,17 @@ and exits with status 0. On range exhaustion without a hit, it prints the curren
 
 ## Building
 
-`saltminer` needs a Rust toolchain, an OpenCL loader library to link against, and at least one OpenCL ICD at runtime so the loader can actually find a device.
-
-### Rust toolchain
+Needs a Rust toolchain, the OpenCL loader to link against, and one vendor ICD at runtime. On Debian / Ubuntu / WSL2 Ubuntu:
 
 ```
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
-source "$HOME/.cargo/env"
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+sudo apt-get install ocl-icd-opencl-dev    # loader + headers (link-time)
+sudo apt-get install intel-opencl-icd      # or nvidia driver, or rocm-opencl-runtime, or pocl-opencl-icd for CPU fallback
+cargo build --release
+cargo run --release -- --list-devices      # should show at least one device
 ```
 
-### OpenCL build-time: loader + headers
-
-The build links against `libOpenCL.so` via the Khronos ICD loader. On Debian / Ubuntu (including WSL2 Ubuntu):
-
-```
-sudo apt-get install ocl-icd-opencl-dev
-```
-
-On Fedora / RHEL: `sudo dnf install ocl-icd-devel opencl-headers`. On Arch: `sudo pacman -S ocl-icd opencl-headers`.
-
-Without this package the link step fails with `unable to find library -lOpenCL`.
-
-### OpenCL runtime: at least one ICD
-
-An ICD (Installable Client Driver) is the per-vendor backend that actually knows how to talk to a device. Install whichever matches the hardware you want to mine on — you can install more than one and choose at runtime with `--device`.
-
-- **Intel integrated or discrete GPU** (common on laptops and many WSL2 hosts): `sudo apt-get install intel-opencl-icd`.
-- **NVIDIA discrete GPU**: the NVIDIA proprietary driver already ships an OpenCL ICD; no extra package. On WSL2 this comes along with the standard WSL GPU support.
-- **AMD discrete GPU**: ROCm's `rocm-opencl-runtime`, or the proprietary `amdgpu-pro` OpenCL runtime.
-- **CPU fallback (no GPU required)**: `sudo apt-get install pocl-opencl-icd`. PoCL exposes the host CPU as an OpenCL device. Throughput is modest, but it is invaluable for smoke-testing the kernel on a machine with no usable GPU — for example WSL2 without GPU passthrough configured.
-
-### WSL2 notes
-
-WSL2 forwards Windows GPUs into the Linux environment through `/dev/dxg`, but the OpenCL story is more awkward than CUDA:
-
-- NVIDIA: works with the standard WSL GPU path — install the Windows-side NVIDIA driver, enable WSL GPU support, and the Linux-side `libOpenCL.so` (from `ocl-icd-opencl-dev`) will see the NVIDIA ICD.
-- Intel: `intel-opencl-icd` on recent kernels is usually enough; older WSL2 kernels may not expose the iGPU to user space at all.
-- If neither works, fall back to `pocl-opencl-icd` on the WSL2 CPU. Correctness-wise it exercises exactly the same kernel.
-
-### Verify
-
-```
-cargo run --release -- --list-devices
-```
-
-Should print at least one platform and one device. An empty list means no ICD is installed; a link error means the loader (`ocl-icd-opencl-dev`) is missing.
-
-### Tests
-
-The lane-packing and address-extraction math is covered by pure-Rust unit tests that do not require OpenCL:
-
-```
-cargo test --lib
-```
-
-These link against no OpenCL library and run anywhere Rust runs.
+`cargo test --lib` covers the lane-packing and address math without needing any OpenCL library at all.
 
 ## Non-goals
 
