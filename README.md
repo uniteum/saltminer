@@ -62,6 +62,31 @@ if (uint160(home) & mask) == match:
 
 The init code hash is computed once by the caller — typically `keccak256(deployment_bytecode)`, or for EIP-1167 minimal proxies `keccak256(0x3d602d80600a3d3981f3363d3d373d3d3d363d73 ‖ implementation ‖ 5af43d82803e903d91602b57fd5bf3)`.
 
+## Intra-worker parallelism
+
+A single `saltminer` worker already saturates one whole GPU. Understanding how requires separating three levels of parallelism, from innermost to outermost:
+
+1. **GPU threads within one kernel dispatch.** Each dispatch launches `global_size` threads — typically `2^20` or more. OpenCL distributes them automatically across every compute unit on the device (every SM on NVIDIA, every CU on AMD, every execution unit on an Intel iGPU). The host never schedules onto cores directly; the driver does. This is what makes a single worker scale from a 96-EU integrated iGPU to a discrete GPU with hundreds of CUs without any code change.
+
+2. **Dispatches in sequence.** The worker's host loop issues one dispatch after another, each advancing `start_salt` by `global_size * stride`. Between dispatches the host checks for hits and Ctrl-C. Dispatches are the unit at which the host re-enters control; within a dispatch, the GPU runs uninterrupted.
+
+3. **Workers across the whole job.** The `--shard w/N` scheme splits a search range across `N` independent worker processes, as described below. One worker per GPU (or per machine) is the usual mapping.
+
+So: **the GPU's multi-core parallelism is handled transparently inside level 1.** You do not shard across GPU cores; you pick a `global_size` large enough to keep every core busy and let OpenCL place the threads.
+
+### Tuning `global_size` and `local_size`
+
+- **`global_size`** — total threads per dispatch. Want this large enough that the GPU's schedulers are never idle, but not so large that a single dispatch takes long enough to make Ctrl-C feel laggy. A good starting point is `global_size = 2^20` (about a million threads per dispatch); tune from there.
+- **`local_size`** — threads per work-group. OpenCL reports a device-preferred multiple via `CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE`; picking that (or a small multiple, e.g. 64 or 256) is almost always right. The host asks the driver rather than hardcoding.
+
+These are knobs on the worker, not on the sharding scheme. The salt assignment math (`salt = start_salt + i * stride`) is the same regardless of `global_size`.
+
+### Device selection and multi-GPU hosts
+
+`saltminer` targets one OpenCL device per worker process, selected with a `--device` flag (platform index + device index, listed via `--list-devices`). A host with two GPUs runs two worker processes, each with its own `--device` and its own `--shard w/N`. Simple, crash-isolates one GPU from the other, and uses exactly the same sharding mechanism as multi-machine deployments.
+
+A single-process multi-GPU mode (one command queue per device inside one binary) is **out of scope for v1** — it adds context-management and signal-handling complexity without changing the search itself. If it turns out to be useful later, it can be layered on without touching the kernel or the sharding math.
+
 ## Sharding
 
 `saltminer` supports interleaved sharding so a fixed search range can be split across `N` cooperating workers (multiple machines, multiple GPUs on one machine, or multiple processes on one GPU).
