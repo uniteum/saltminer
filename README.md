@@ -64,6 +64,22 @@ if (uint160(home) & mask) == match:
 
 The init code hash is computed once by the caller — typically `keccak256(deployment_bytecode)`, or for EIP-1167 minimal proxies `keccak256(0x3d602d80600a3d3981f3363d3d373d3d3d363d73 ‖ implementation ‖ 5af43d82803e903d91602b57fd5bf3)`.
 
+### Gotcha: EIP-1167 clones hash the proxy, not the implementation
+
+If the factory deploys clones via `Clones.cloneDeterministic` (OpenZeppelin) or any other EIP-1167 helper, `--initcode-hash` is **not** the hash of the implementation contract's deployment bytecode. It is the hash of the 55-byte minimal-proxy init code with the implementation address spliced in:
+
+```
+0x3d602d80600a3d3981f3363d3d373d3d3d363d73<IMPL>5af43d82803e903d91602b57fd5bf3
+```
+
+where `<IMPL>` is the 20-byte implementation address that the proxies will delegate to. For a factory that clones itself (so both the deployer and the implementation are the same contract), splice in that one address. Compute the hash with `cast`:
+
+```
+cast keccak 0x3d602d80600a3d3981f3363d3d373d3d3d363d73<impl-address>5af43d82803e903d91602b57fd5bf3
+```
+
+A common mistake is to grab the `input` field of the factory's own deployment transaction (e.g. from a Foundry `broadcast/*.json`) and hash that instead — that gives the hash of the factory's creation bytecode, which is unrelated to what CREATE2 sees for the clones. Passing that wrong hash to `saltminer` will make every mined address appear valid to the miner but disagree with what the factory actually deploys on-chain.
+
 ## Intra-worker parallelism
 
 A single `saltminer` worker saturates one whole GPU on its own. This section explains how, because the GPU execution model is unlike a CPU for-loop and the difference matters for understanding the sharding math below.

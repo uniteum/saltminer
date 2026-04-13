@@ -216,7 +216,7 @@ fn main() -> Result<()> {
             let salt = res[0];
             let addr = address_from_state(res[1], res[2], res[3]);
             eprintln!();
-            println!("salt = 0x{:016x}", salt);
+            println!("salt = 0x{:064x}", salt);
             println!("home = 0x{}", hex::encode(addr));
             return Ok(());
         }
