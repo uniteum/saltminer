@@ -1,0 +1,20 @@
+[package]
+name = "saltminer"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "GPU-accelerated CREATE2 salt miner"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+ctrlc = "3"
+hex = "0.4"
+ocl = "0.19"
+
+[dev-dependencies]
+tiny-keccak = { version = "2", features = ["keccak"] }
+
+[profile.release]
+lto = true
+codegen-units = 1

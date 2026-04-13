@@ -30,7 +30,9 @@ Any bit the caller doesn't care about is simply zero in the mask.
 
 ## Salt space
 
-The search is bounded: `salt ∈ [min, max)`, where `min` and `max` are `uint256` values. A caller who wants to search the full range just passes `0` and `2^256`. A caller who has already exhausted one range and wants to continue just bumps `min` upward and relaunches.
+The search is bounded: `salt ∈ [min, max)`. A caller who has already exhausted one range and wants to continue just bumps `min` upward and relaunches.
+
+**v1 simplification: salt is a `u64`, not a `uint256`.** Only the low 8 bytes of the on-chain `create2Salt` actually vary across attempts — those 8 bytes occupy the position Solidity would write `bytes32(uint256(salt))` to, i.e. the last 8 bytes of the 32-byte salt word. This keeps the GPU kernel working in native 64-bit arithmetic with no big-integer code, and 2⁶⁴ ≈ 1.8 × 10¹⁹ attempts is vastly more than any realistic mining budget. The other 24 bytes of `create2Salt` are fixed to the corresponding bytes of `argsHash`, so the address still binds to every parameter committed in `argsHash`. Widening the salt beyond 64 bits is a future extension and would only touch the kernel's salt-unpacking lines and the host's range arithmetic.
 
 ## Binding deployment parameters to the salt
 
@@ -207,7 +209,7 @@ saltminer \
 - `--initcode-hash` — `keccak256` of the init code the factory will deploy. Precomputed by the caller.
 - `--args-hash` — `keccak256(abi.encode(...))` over whatever parameters the factory binds into its salt. Precomputed off-chain; keeps the miner agnostic to parameter layout.
 - `--mask`, `--match` — 160-bit vanity criterion.
-- `--min`, `--max` — half-open salt search range.
+- `--min`, `--max` — half-open `u64` salt search range. See the "Salt space" section above for why v1 uses `u64`.
 - `--shard` — `w/N`, interleaved worker index and count. Default `0/1` (no sharding).
 
 On a hit, the program prints:
