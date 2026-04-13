@@ -64,22 +64,71 @@ The init code hash is computed once by the caller — typically `keccak256(deplo
 
 ## Intra-worker parallelism
 
-A single `saltminer` worker already saturates one whole GPU. Understanding how requires separating three levels of parallelism, from innermost to outermost:
+A single `saltminer` worker saturates one whole GPU on its own. This section explains how, because the GPU execution model is unlike a CPU for-loop and the difference matters for understanding the sharding math below.
 
-1. **GPU threads within one kernel dispatch.** Each dispatch launches `global_size` threads — typically `2^20` or more. OpenCL distributes them automatically across every compute unit on the device (every SM on NVIDIA, every CU on AMD, every execution unit on an Intel iGPU). The host never schedules onto cores directly; the driver does. This is what makes a single worker scale from a 96-EU integrated iGPU to a discrete GPU with hundreds of CUs without any code change.
+### The kernel is not a loop
 
-2. **Dispatches in sequence.** The worker's host loop issues one dispatch after another, each advancing `start_salt` by `global_size * stride`. Between dispatches the host checks for hits and Ctrl-C. Dispatches are the unit at which the host re-enters control; within a dispatch, the GPU runs uninterrupted.
+On a CPU you'd test a million salts like this:
 
-3. **Workers across the whole job.** The `--shard w/N` scheme splits a search range across `N` independent worker processes, as described below. One worker per GPU (or per machine) is the usual mapping.
+```c
+for (size_t i = 0; i < 1048576; i++) {
+    uint64_t salt = start_salt + i * stride;
+    if (matches(salt)) report(salt);
+}
+```
 
-So: **the GPU's multi-core parallelism is handled transparently inside level 1.** You do not shard across GPU cores; you pick a `global_size` large enough to keep every core busy and let OpenCL place the threads.
+On the GPU there is no `for`. The kernel is written as the *body* of that loop only — one iteration, parameterized by a thread ID:
+
+```c
+__kernel void mine(ulong start_salt, ulong stride, /* ... */) {
+    size_t i    = get_global_id(0);       // "which iteration am I?"
+    ulong  salt = start_salt + i * stride;
+    if (matches(salt)) report(salt);
+}
+```
+
+The host then tells the driver **"run this kernel 1,048,576 times in parallel"** by passing `global_size = 1 << 20` to the enqueue call. OpenCL spawns 1,048,576 logical threads, each of which sees a different `i` from `get_global_id(0)`. There is no explicit iteration anywhere: the loop has been *unrolled into hardware parallelism*. Every thread runs the body once, in parallel, on its own salt.
+
+So when this README says "thread `i` computes `salt = start_salt + i * stride`," it means: the kernel body runs `global_size` times simultaneously, and the `i`-th invocation picks up the `i`-th salt.
+
+### How those threads land on physical cores
+
+A GPU does not have a million physical cores. A modest integrated iGPU might have ~100 execution units; a big discrete card has a few thousand shader cores. The driver maps the 1M logical threads onto that physical hardware in three steps, none of which the host code has to think about:
+
+1. **Group threads into warps / wavefronts.** The 1M threads are partitioned into fixed-size bundles (32 threads on NVIDIA, 32 or 64 on AMD, 8–32 on Intel). Every thread in a bundle executes the same instruction at the same time on different data — this is SIMD inside the GPU.
+2. **Schedule bundles onto compute units.** The driver hands each compute unit a queue of bundles. A compute unit runs one bundle's instruction, then swaps to another bundle while the first waits on memory or a long-latency op. This overlap is how GPUs hide latency and keep all cores busy.
+3. **Iterate until every bundle is done.** A compute unit chews through its assigned bundles one after another. When all 1M threads have finished, the dispatch is complete and control returns to the host.
+
+The host code never participates in any of this. It writes a kernel that processes one salt, picks a `global_size`, and enqueues it. The driver handles bundling, scheduling, latency hiding, and mapping onto however many cores the device actually has. The same binary saturates a 96-EU Intel iGPU and a 16,000-core discrete GPU without change.
+
+### Where the outer loop comes back
+
+A single dispatch only covers `global_size` salts — a million or so. A search range can be much larger than that, so the host wraps the dispatch in an outer loop:
+
+```
+start_salt = min + w
+while start_salt < max:
+    enqueue_kernel(start_salt, stride, ...)   // runs global_size threads in parallel on the GPU
+    wait_for_completion()
+    start_salt += global_size * stride        // advance to the next million salts
+```
+
+Each iteration of this *host* loop launches one GPU dispatch, which internally runs a million parallel kernel invocations, which together cover one million salts. The host loop exists so Ctrl-C can be noticed between dispatches and so `start_salt` can be advanced; it is not the parallelism, it is the chunking.
+
+Three levels total, from innermost to outermost:
+
+1. **Inside one dispatch:** `global_size` parallel kernel invocations on the GPU, each testing one salt. The driver places them on physical cores.
+2. **Across dispatches in one worker:** the host loop issues dispatch after dispatch, advancing `start_salt` by `global_size * stride` each time, until the range is exhausted or a hit is found.
+3. **Across workers in one job:** the `--shard w/N` scheme (next section) splits a search range across `N` independent worker processes.
+
+The GPU's multi-core parallelism lives entirely at level 1. There is no sharding to do across GPU cores: pick a `global_size` large enough to fill the device and let the driver place the threads.
 
 ### Tuning `global_size` and `local_size`
 
-- **`global_size`** — total threads per dispatch. Want this large enough that the GPU's schedulers are never idle, but not so large that a single dispatch takes long enough to make Ctrl-C feel laggy. A good starting point is `global_size = 2^20` (about a million threads per dispatch); tune from there.
-- **`local_size`** — threads per work-group. OpenCL reports a device-preferred multiple via `CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE`; picking that (or a small multiple, e.g. 64 or 256) is almost always right. The host asks the driver rather than hardcoding.
+- **`global_size`** — how many parallel kernel invocations per dispatch. Want this large enough that every compute unit on the GPU has bundles to chew on (so none sit idle), but not so large that one dispatch takes long enough to make Ctrl-C feel laggy. A good starting point is `2^20` (about a million threads per dispatch); tune from there.
+- **`local_size`** — how many of those threads are bundled into one work-group. OpenCL reports a device-preferred multiple via `CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE`; using that (or a small multiple like 64 or 256) is almost always right. The host queries the driver rather than hardcoding.
 
-These are knobs on the worker, not on the sharding scheme. The salt assignment math (`salt = start_salt + i * stride`) is the same regardless of `global_size`.
+These knobs affect throughput only. The salt assignment math (`salt = start_salt + i * stride`) is independent of both.
 
 ### Device selection and multi-GPU hosts
 
