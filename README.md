@@ -209,6 +209,8 @@ On `Ctrl-C` or range exhaustion without a hit, the host prints the current `star
 
 ## CLI
 
+There is no install step. Invoke via `cargo run --release -- <args>` from the repo root, or run the built binary directly at `target/release/saltminer`. To put it on your `PATH`, either `cargo install --path .` or symlink `target/release/saltminer` into a directory on `PATH`. The examples below elide the path and write `saltminer` for readability.
+
 ```
 saltminer \
   --deployer      0x<20-byte-hex> \
