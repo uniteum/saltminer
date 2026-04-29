@@ -66,7 +66,7 @@ The init code hash is computed once by the caller — typically `keccak256(deplo
 
 ### Gotcha: EIP-1167 clones hash the proxy, not the implementation
 
-If the factory deploys clones via `Clones.cloneDeterministic` (OpenZeppelin) or any other EIP-1167 helper, `--initcode-hash` is **not** the hash of the implementation contract's deployment bytecode. It is the hash of the 55-byte minimal-proxy init code with the implementation address spliced in:
+If the factory deploys clones via `Clones.cloneDeterministic` (OpenZeppelin) or any other EIP-1167 helper, `--initcodehash` is **not** the hash of the implementation contract's deployment bytecode. It is the hash of the 55-byte minimal-proxy init code with the implementation address spliced in:
 
 ```
 0x3d602d80600a3d3981f3363d3d373d3d3d363d73<IMPL>5af43d82803e903d91602b57fd5bf3
@@ -214,8 +214,8 @@ There is no install step. Invoke via `cargo run --release -- <args>` from the re
 ```
 saltminer \
   --deployer      0x<20-byte-hex> \
-  --initcode-hash 0x<32-byte-hex> \
-  --args-hash     0x<32-byte-hex> \
+  --initcodehash  0x<32-byte-hex> \
+  --argshash      0x<32-byte-hex> \
   --mask          0xffffffff00000000000000000000000000000000 \
   --match         0x0000000000000000000000000000000000000000 \
   --min           0 \
@@ -224,8 +224,8 @@ saltminer \
 ```
 
 - `--deployer` — the factory address that will call CREATE2.
-- `--initcode-hash` — `keccak256` of the init code the factory will deploy. Precomputed by the caller.
-- `--args-hash` — `keccak256(abi.encode(...))` over whatever parameters the factory binds into its salt. Precomputed off-chain; keeps the miner agnostic to parameter layout.
+- `--initcodehash` — `keccak256` of the init code the factory will deploy. Precomputed by the caller.
+- `--argshash` — `keccak256(abi.encode(...))` over whatever parameters the factory binds into its salt. Precomputed off-chain; keeps the miner agnostic to parameter layout.
 - `--mask`, `--match` — 160-bit vanity criterion.
 - `--min`, `--max` — half-open `u64` salt search range. See the "Salt space" section above for why v1 uses `u64`.
 - `--shard` — `w/N`, interleaved worker index and count. Default `0/1` (no sharding).

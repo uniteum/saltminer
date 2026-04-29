@@ -12,11 +12,11 @@ Needs `ocl-icd-opencl-dev` and a GPU ICD (`intel-opencl-icd`, NVIDIA driver, etc
 
 ```
 saltminer \
-  --deployer      0xFactoryAddress \
-  --initcode-hash 0xKeccakOfInitCode \
-  --args-hash     0xKeccakOfEncodedArgs \
-  --mask          0xffffffff00000000000000000000000000000000 \
-  --match         0x0000000000000000000000000000000000000000
+  --deployer     0xFactoryAddress \
+  --initcodehash 0xKeccakOfInitCode \
+  --argshash     0xKeccakOfEncodedArgs \
+  --mask         0xffffffff00000000000000000000000000000000 \
+  --match        0x0000000000000000000000000000000000000000
 ```
 
 On a hit it prints `salt` and `home` and exits. Hand that `salt` to your factory.

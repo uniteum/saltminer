@@ -8,7 +8,7 @@ Arachnid's init code is:
 0x604580600e600039806000f350fe7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3
 ```
 
-and its `keccak256` is `0x50ea9137a35a9ad33b0ed4a431e9b6996ea9ed1f14781126cec78f168c0e64e5`. Arachnid doesn't mix parameters into its salt, so `--args-hash` is zero and the full 32-byte CREATE2 salt is caller-controlled. See [README.md](README.md) for the mask/match model and the salt-space math.
+and its `keccak256` is `0x50ea9137a35a9ad33b0ed4a431e9b6996ea9ed1f14781126cec78f168c0e64e5`. Arachnid doesn't mix parameters into its salt, so `--argshash` is zero and the full 32-byte CREATE2 salt is caller-controlled. See [README.md](README.md) for the mask/match model and the salt-space math.
 
 ## 1. Mine
 
@@ -20,7 +20,7 @@ initcodehash=0x50ea9137a35a9ad33b0ed4a431e9b6996ea9ed1f14781126cec78f168c0e64e5
 argshash=0xE396da99091B535B65384914B178b9264c7426da000000000000000000000000
 mask=0xffffff00000000000000000000000000000000ff
 match=0x3141590000000000000000000000000000000097
-saltminer --deployer $deployer --initcode-hash $initcodehash --args-hash $argshash --mask $mask --match $match
+saltminer --deployer $deployer --initcodehash $initcodehash --argshash $argshash --mask $mask --match $match
 ```
 
 On a hit saltminer prints the `salt` and the predicted `home` address.

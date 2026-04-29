@@ -30,11 +30,11 @@ struct Args {
     deployer: Option<String>,
 
     /// keccak256 of the init code the factory will deploy, 32-byte hex.
-    #[arg(long = "initcode-hash")]
+    #[arg(long = "initcodehash")]
     initcode_hash: Option<String>,
 
     /// keccak256(abi.encode(...)) of the parameters bound into the factory's salt, 32-byte hex.
-    #[arg(long = "args-hash")]
+    #[arg(long = "argshash")]
     args_hash: Option<String>,
 
     /// Address bit-mask, 20-byte hex (160 bits).
@@ -106,10 +106,10 @@ fn main() -> Result<()> {
     let initcode_hash = parse_hex_bytes::<32>(
         args.initcode_hash
             .as_deref()
-            .context("--initcode-hash required")?,
+            .context("--initcodehash required")?,
     )?;
     let args_hash =
-        parse_hex_bytes::<32>(args.args_hash.as_deref().context("--args-hash required")?)?;
+        parse_hex_bytes::<32>(args.args_hash.as_deref().context("--argshash required")?)?;
     let mask = parse_hex_bytes::<20>(args.mask.as_deref().context("--mask required")?)?;
     let match_val =
         parse_hex_bytes::<20>(args.match_val.as_deref().context("--match required")?)?;
