@@ -111,8 +111,14 @@ fn main() -> Result<()> {
     let args_hash =
         parse_hex_bytes::<32>(args.args_hash.as_deref().context("--argshash required")?)?;
     let mask = parse_hex_bytes::<20>(args.mask.as_deref().context("--mask required")?)?;
-    let match_val =
+    let mut match_val =
         parse_hex_bytes::<20>(args.match_val.as_deref().context("--match required")?)?;
+    // AND with the mask so callers can pass high-entropy values (e.g. the digits
+    // of pi) and have non-mask bits silently dropped instead of making the
+    // comparison unsatisfiable.
+    for i in 0..20 {
+        match_val[i] &= mask[i];
+    }
     let min = parse_u64(&args.min)?;
     let max = parse_u64(&args.max)?;
     let (w, n) = parse_shard(&args.shard)?;
