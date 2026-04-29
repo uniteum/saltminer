@@ -49,6 +49,20 @@ A factory that instead hashes `salt` together with its parameters — `create2Sa
 
 `saltminer` itself is agnostic to how `argsHash` is computed. The caller precomputes it off-chain and passes it in as a 32-byte hex value.
 
+## Caller-bound salts (frontrunner-resistant deployers)
+
+A class of CREATE2 deployers — Pcaversaccio's CreateX, the deployer used by the Uniswap v4 vanity-address community effort, and others — require that the high 20 bytes of the on-chain salt equal `msg.sender` and revert otherwise. This binds a mined address to a specific EOA: even after the salt is published, only that EOA can broadcast the deployment, and a frontrunner watching the mempool cannot resubmit it from their own account or substitute their own constructor args.
+
+`saltminer` supports the convention by encoding the EOA in the high 20 bytes of `--argshash`:
+
+```
+argshash = 0x<EOA_address_20_bytes><12 zero bytes>
+```
+
+The v1 salt is a `u64` occupying the low 8 bytes of the 32-byte salt word, and `create2Salt = argsHash ^ salt`, so the high 20 bytes of `create2Salt` come through unchanged as the EOA — exactly the prefix the deployer checks. Mining throughput is unaffected; only the constant fed into the XOR moves. See [VANITY_ARACHNID.md](VANITY_ARACHNID.md) for a worked example.
+
+If the factory also binds other parameters into its salt, fold them into the low 12 bytes of `argsHash` (e.g. `argsHash = (EOA << 96) | (keccak256(abi.encode(params)) & 2^96 - 1)`); the EOA prefix and the parameter commitment then both ride along into `create2Salt`.
+
 ## Algorithm
 
 For a given deployer, init-code hash, args hash, mask, match, and salt range, each GPU thread runs:
