@@ -17,7 +17,7 @@ Target 8 leading zero hex digits (4 zero bytes). ~4.3B attempts; seconds to a mi
 ```
 deployer=0x4e59b44847b379578588920cA78FbF26c0B4956C
 initcodehash=0x50ea9137a35a9ad33b0ed4a431e9b6996ea9ed1f14781126cec78f168c0e64e5
-argshash=0x0000000000000000000000000000000000000000000000000000000000000000
+argshash=0xE396da99091B535B65384914B178b9264c7426da000000000000000000000000
 mask=0xffffff00000000000000000000000000000000ff
 match=0x3141590000000000000000000000000000000097
 saltminer --deployer $deployer --initcode-hash $initcodehash --args-hash $argshash --mask $mask --match $match
@@ -41,10 +41,12 @@ Must equal `home` exactly. If not, something is off — fix it before spending g
 Send a transaction to `0x4e59…` with calldata = `bytes32(salt) ‖ initcode`:
 
 ```
-salt=0x00000000000000000000000000000000000000000000000000000000d711155f
+salt=0x000000000000000000000000000000000000000000000000000000000c7869ed
+salt=0xE396da99091B535B65384914B178b9264c7426da00000000000000000c7869ed
 deployer=0x4e59b44847b379578588920cA78FbF26c0B4956C
 arachnid_code=0x604580600e600039806000f350fe7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3
 vanity_data=$(cast concat-hex $salt $arachnid_code)
+home=0x314159b4108323c48c6cc92f7ed84d4626de4f97
 cast send $deployer $vanity_data --rpc-url 11155111 --private-key $tx_key
 ```
 
