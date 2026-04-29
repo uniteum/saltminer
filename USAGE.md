@@ -16,7 +16,7 @@ saltminer \
   --initcodehash 0xKeccakOfInitCode \
   --argshash     0xKeccakOfEncodedArgs \
   --mask         0xffffffff00000000000000000000000000000000 \
-  --match        0x0000000000000000000000000000000000000000
+  --target       0x0000000000000000000000000000000000000000
 ```
 
 On a hit it prints `salt` and `home` and exits. Hand that `salt` to your factory.

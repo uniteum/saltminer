@@ -12,15 +12,15 @@ The search is embarrassingly parallel and dominated by keccak-256. A GPU is the 
 
 ## Matching criteria
 
-`saltminer` treats the 160-bit address as an integer and accepts a `(mask, match)` pair:
+`saltminer` treats the 160-bit address as an integer and accepts a `(mask, target)` pair:
 
 ```
-(uint160(home) & mask) == match
+(uint160(home) & mask) == target
 ```
 
 This subsumes every common vanity pattern:
 
-| Pattern                | Mask                                         | Match                                        |
+| Pattern                | Mask                                         | Target                                       |
 | ---------------------- | -------------------------------------------- | -------------------------------------------- |
 | 4 leading zero bytes   | `0xffffffff00000000000000000000000000000000` | `0x0000000000000000000000000000000000000000` |
 | Trailing `...dead`     | `0x000000000000000000000000000000000000ffff` | `0x000000000000000000000000000000000000dead` |
@@ -65,12 +65,12 @@ If the factory also binds other parameters into its salt, fold them into the low
 
 ## Algorithm
 
-For a given deployer, init-code hash, args hash, mask, match, and salt range, each GPU thread runs:
+For a given deployer, init-code hash, args hash, mask, target, and salt range, each GPU thread runs:
 
 ```
 create2Salt = argsHash ^ salt
 home = keccak256(0xff ‖ deployer ‖ create2Salt ‖ initcodeHash)[12:]
-if (uint160(home) & mask) == match:
+if (uint160(home) & mask) == target:
     report (salt, home)
 ```
 
@@ -203,7 +203,7 @@ Host loop for worker `w` of `N`:
 start_salt = min + w               // first salt this worker ever tests
 stride     = N
 while start_salt < max:
-    dispatch_kernel(start_salt, stride, max, argsHash, deployer, initcodeHash, mask, match)
+    dispatch_kernel(start_salt, stride, max, argsHash, deployer, initcodeHash, mask, target)
     start_salt += global_size * stride
 ```
 
@@ -231,7 +231,7 @@ saltminer \
   --initcodehash  0x<32-byte-hex> \
   --argshash      0x<32-byte-hex> \
   --mask          0xffffffff00000000000000000000000000000000 \
-  --match         0x0000000000000000000000000000000000000000 \
+  --target        0x0000000000000000000000000000000000000000 \
   --min           0 \
   --max           0xffffffffffffffff \
   --shard         0/1
@@ -240,7 +240,7 @@ saltminer \
 - `--deployer` — the factory address that will call CREATE2.
 - `--initcodehash` — `keccak256` of the init code the factory will deploy. Precomputed by the caller.
 - `--argshash` — `keccak256(abi.encode(...))` over whatever parameters the factory binds into its salt. Precomputed off-chain; keeps the miner agnostic to parameter layout.
-- `--mask`, `--match` — 160-bit vanity criterion.
+- `--mask`, `--target` — 160-bit vanity criterion.
 - `--min`, `--max` — half-open `u64` salt search range. See the "Salt space" section above for why v1 uses `u64`.
 - `--shard` — `w/N`, interleaved worker index and count. Default `0/1` (no sharding).
 

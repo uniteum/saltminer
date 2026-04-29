@@ -41,9 +41,9 @@ struct Args {
     #[arg(long)]
     mask: Option<String>,
 
-    /// Address match value, 20-byte hex (160 bits). Only bits where mask == 1 are compared.
-    #[arg(long = "match")]
-    match_val: Option<String>,
+    /// Address target value, 20-byte hex (160 bits). Only bits where mask == 1 are compared.
+    #[arg(long = "target")]
+    target: Option<String>,
 
     /// Minimum salt (inclusive). u64 decimal or 0x-prefixed hex.
     #[arg(long, default_value = "0")]
@@ -111,13 +111,13 @@ fn main() -> Result<()> {
     let args_hash =
         parse_hex_bytes::<32>(args.args_hash.as_deref().context("--argshash required")?)?;
     let mask = parse_hex_bytes::<20>(args.mask.as_deref().context("--mask required")?)?;
-    let mut match_val =
-        parse_hex_bytes::<20>(args.match_val.as_deref().context("--match required")?)?;
+    let mut target =
+        parse_hex_bytes::<20>(args.target.as_deref().context("--target required")?)?;
     // AND with the mask so callers can pass high-entropy values (e.g. the digits
     // of pi) and have non-mask bits silently dropped instead of making the
     // comparison unsatisfiable.
     for i in 0..20 {
-        match_val[i] &= mask[i];
+        target[i] &= mask[i];
     }
     let min = parse_u64(&args.min)?;
     let max = parse_u64(&args.max)?;
@@ -139,7 +139,7 @@ fn main() -> Result<()> {
     );
 
     let base_state = compute_base_state(&deployer, &args_hash, &initcode_hash);
-    let mask_lanes = compute_lane_masks(&mask, &match_val);
+    let mask_lanes = compute_lane_masks(&mask, &target);
 
     let ctx = OclContext::builder()
         .platform(platform)

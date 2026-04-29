@@ -8,7 +8,7 @@ Arachnid's init code is:
 0x604580600e600039806000f350fe7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3
 ```
 
-and its `keccak256` is `0x50ea9137a35a9ad33b0ed4a431e9b6996ea9ed1f14781126cec78f168c0e64e5`. Arachnid doesn't mix parameters into its salt — the full 32-byte CREATE2 salt is caller-controlled. The example below sets `--argshash` to the deployer EOA shifted into the high 20 bytes; this follows the [caller-bound-salt convention](README.md#caller-bound-salts-frontrunner-resistant-deployers) used by Pcaversaccio's CreateX, the Uniswap v4 vanity-address community effort, and other frontrunner-resistant deployers. Arachnid does not enforce it, but matching the shape keeps the mined address portable to deployers that do, and stamps the deployer EOA into the on-chain salt as a public claim. See [README.md](README.md) for the mask/match model and the salt-space math.
+and its `keccak256` is `0x50ea9137a35a9ad33b0ed4a431e9b6996ea9ed1f14781126cec78f168c0e64e5`. Arachnid doesn't mix parameters into its salt — the full 32-byte CREATE2 salt is caller-controlled. The example below sets `--argshash` to the deployer EOA shifted into the high 20 bytes; this follows the [caller-bound-salt convention](README.md#caller-bound-salts-frontrunner-resistant-deployers) used by Pcaversaccio's CreateX, the Uniswap v4 vanity-address community effort, and other frontrunner-resistant deployers. Arachnid does not enforce it, but matching the shape keeps the mined address portable to deployers that do, and stamps the deployer EOA into the on-chain salt as a public claim. See [README.md](README.md) for the mask/target model and the salt-space math.
 
 ## 1. Mine
 
@@ -19,8 +19,8 @@ deployer=0x4e59b44847b379578588920cA78FbF26c0B4956C
 initcodehash=0x50ea9137a35a9ad33b0ed4a431e9b6996ea9ed1f14781126cec78f168c0e64e5
 argshash=0xE396da99091B535B65384914B178b9264c7426da000000000000000000000000
 mask=0xffffff00000000000000000000000000000000ff
-match=0x3141590000000000000000000000000000000097
-saltminer --deployer $deployer --initcodehash $initcodehash --argshash $argshash --mask $mask --match $match
+target=0x3141590000000000000000000000000000000097
+saltminer --deployer $deployer --initcodehash $initcodehash --argshash $argshash --mask $mask --target $target
 ```
 
 On a hit saltminer prints the `salt` and the predicted `home` address.

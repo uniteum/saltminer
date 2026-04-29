@@ -62,25 +62,25 @@ pub fn compute_base_state(
     lanes
 }
 
-/// Translate a 20-byte address mask/match pair into the three state lanes the
+/// Translate a 20-byte address mask/target pair into the three state lanes the
 /// kernel compares against. The 160-bit address occupies:
 ///   addr[0..4]   = bits 32..63 of squeezed state lane 1
 ///   addr[4..12]  = all of state lane 2 (little-endian)
 ///   addr[12..20] = all of state lane 3 (little-endian)
-pub fn compute_lane_masks(mask: &[u8; 20], m: &[u8; 20]) -> [u64; 6] {
+pub fn compute_lane_masks(mask: &[u8; 20], target: &[u8; 20]) -> [u64; 6] {
     let l1_mask = ((mask[0] as u64) << 32)
         | ((mask[1] as u64) << 40)
         | ((mask[2] as u64) << 48)
         | ((mask[3] as u64) << 56);
-    let l1_match = ((m[0] as u64) << 32)
-        | ((m[1] as u64) << 40)
-        | ((m[2] as u64) << 48)
-        | ((m[3] as u64) << 56);
+    let l1_target = ((target[0] as u64) << 32)
+        | ((target[1] as u64) << 40)
+        | ((target[2] as u64) << 48)
+        | ((target[3] as u64) << 56);
     let l2_mask = u64::from_le_bytes(mask[4..12].try_into().unwrap());
-    let l2_match = u64::from_le_bytes(m[4..12].try_into().unwrap());
+    let l2_target = u64::from_le_bytes(target[4..12].try_into().unwrap());
     let l3_mask = u64::from_le_bytes(mask[12..20].try_into().unwrap());
-    let l3_match = u64::from_le_bytes(m[12..20].try_into().unwrap());
-    [l1_mask, l1_match, l2_mask, l2_match, l3_mask, l3_match]
+    let l3_target = u64::from_le_bytes(target[12..20].try_into().unwrap());
+    [l1_mask, l1_target, l2_mask, l2_target, l3_mask, l3_target]
 }
 
 pub fn address_from_state(a1: u64, a2: u64, a3: u64) -> [u8; 20] {

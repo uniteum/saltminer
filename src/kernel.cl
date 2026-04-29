@@ -6,7 +6,7 @@
 // the bytes of create2Salt that correspond to Solidity's `bytes32(uint256(salt))`
 // — the last 8 bytes of create2Salt, which straddle lanes 5 and 6 — runs a
 // single Keccak-f[1600], and checks whether the resulting address matches a
-// caller-supplied mask/match on lanes 1..3 of the squeezed state.
+// caller-supplied mask/target on lanes 1..3 of the squeezed state.
 
 __constant ulong RC[24] = {
     0x0000000000000001UL, 0x0000000000008082UL, 0x800000000000808aUL,
