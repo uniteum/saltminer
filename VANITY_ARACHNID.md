@@ -15,23 +15,23 @@ and its `keccak256` is `0x50ea9137a35a9ad33b0ed4a431e9b6996ea9ed1f14781126cec78f
 Target 8 leading zero hex digits (4 zero bytes). ~4.3B attempts; seconds to a minute on a desktop GPU.
 
 ```
-saltminer \
-  --deployer      0x4e59b44847b379578588920cA78FbF26c0B4956C \
-  --initcode-hash 0x50ea9137a35a9ad33b0ed4a431e9b6996ea9ed1f14781126cec78f168c0e64e5 \
-  --args-hash     0x0000000000000000000000000000000000000000000000000000000000000000 \
-  --mask          0xffffffff00000000000000000000000000000000 \
-  --match         0x0000000000000000000000000000000000000000
+deployer=0x4e59b44847b379578588920cA78FbF26c0B4956C
+initcodehash=0x50ea9137a35a9ad33b0ed4a431e9b6996ea9ed1f14781126cec78f168c0e64e5
+argshash=0x0000000000000000000000000000000000000000000000000000000000000000
+mask=0xffffff00000000000000000000000000000000ff
+match=0x3141590000000000000000000000000000000097
+saltminer --deployer $deployer --initcode-hash $initcodehash --args-hash $argshash --mask $mask --match $match
 ```
 
-On a hit saltminer prints the u64 `salt` and the predicted `home` address.
+On a hit saltminer prints the `salt` and the predicted `home` address.
+```
+salt=0x00000000000000000000000000000000000000000000000000000000d711155f
+```
 
 ## 2. Verify
 
 ```
-cast create2 \
-  --deployer       0x4e59b44847b379578588920cA78FbF26c0B4956C \
-  --salt           $(cast to-uint256 <saltU64>) \
-  --init-code-hash 0x50ea9137a35a9ad33b0ed4a431e9b6996ea9ed1f14781126cec78f168c0e64e5
+cast create2 --deployer $deployer --salt $salt --init-code-hash $initcodehash
 ```
 
 Must equal `home` exactly. If not, something is off — fix it before spending gas.
@@ -41,11 +41,11 @@ Must equal `home` exactly. If not, something is off — fix it before spending g
 Send a transaction to `0x4e59…` with calldata = `bytes32(salt) ‖ initcode`:
 
 ```
-cast send 0x4e59b44847b379578588920cA78FbF26c0B4956C \
-  $(cast concat-hex \
-      $(cast to-uint256 <saltU64>) \
-      0x604580600e600039806000f350fe7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3) \
-  --rpc-url <rpc> --private-key <key>
+salt=0x00000000000000000000000000000000000000000000000000000000d711155f
+deployer=0x4e59b44847b379578588920cA78FbF26c0B4956C
+arachnid_code=0x604580600e600039806000f350fe7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3
+vanity_data=$(cast concat-hex $salt $arachnid_code)
+cast send $deployer $vanity_data --rpc-url 11155111 --private-key $tx_key
 ```
 
 `cast code <home> --rpc-url <rpc>` should now return Arachnid's runtime bytecode.
