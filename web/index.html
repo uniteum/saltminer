@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>saltminer (web)</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2em auto; padding: 0 1em; }
+  h1 { font-size: 1.4em; margin-bottom: 0.2em; }
+  p.sub { color: #555; margin-top: 0; }
+  label { display: block; margin: 0.6em 0 0.15em; font-weight: 600; font-size: 0.9em; }
+  input[type=text] { width: 100%; font-family: ui-monospace, monospace; font-size: 0.9em; padding: 0.35em; box-sizing: border-box; }
+  .row { display: flex; gap: 0.5em; }
+  .row > div { flex: 1; }
+  .actions { margin-top: 1em; }
+  button { font-size: 1em; padding: 0.4em 1em; margin-right: 0.5em; }
+  #status { margin-top: 1em; font-family: ui-monospace, monospace; min-height: 1.2em; }
+  #result { margin-top: 0.5em; font-family: ui-monospace, monospace; font-size: 0.95em; word-break: break-all; }
+  #log { margin-top: 0.5em; font-family: ui-monospace, monospace; font-size: 0.85em; background: #f4f4f4; padding: 0.5em; height: 7em; overflow: auto; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>saltminer (web)</h1>
+<p class="sub">WebGPU port of <code>src/kernel.cl</code>. Inputs match the Rust CLI flags.</p>
+
+<label for="deployer">deployer (20 bytes)</label>
+<input id="deployer" type="text" value="0x14ae57aed6ac1cd48fa811ed885ab4a4c5e28c42">
+
+<label for="initcodehash">initcodehash (32 bytes)</label>
+<input id="initcodehash" type="text" value="0xdeadbeefcafebabef00dfaceFEEDc0de1234567890abcdefaabbccddeeff0011">
+
+<label for="argshash">argshash (32 bytes)</label>
+<input id="argshash" type="text" value="0x0123456789abcdeffedcba98765432100f1e2d3c4b5a69788796a5b4c3d2e1f0">
+
+<div class="row">
+  <div>
+    <label for="mask">mask (20 bytes)</label>
+    <input id="mask" type="text" value="0xffff000000000000000000000000000000000000">
+  </div>
+  <div>
+    <label for="target">target (20 bytes)</label>
+    <input id="target" type="text" value="0xc0de000000000000000000000000000000000000">
+  </div>
+</div>
+
+<div class="row">
+  <div>
+    <label for="min">min salt</label>
+    <input id="min" type="text" value="0">
+  </div>
+  <div>
+    <label for="max">max salt</label>
+    <input id="max" type="text" value="0xffffffffffffffff">
+  </div>
+  <div>
+    <label for="dispatch">threads / dispatch</label>
+    <input id="dispatch" type="text" value="1048576">
+  </div>
+</div>
+
+<div class="actions">
+  <button id="mine">mine</button>
+  <button id="stop" disabled>stop</button>
+</div>
+
+<div id="status"></div>
+<div id="result"></div>
+<div id="log"></div>
+
+<script type="module" src="./saltminer.js"></script>
+</body>
+</html>
