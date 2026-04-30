@@ -2,13 +2,12 @@
 // inputs, precompute base_state and mask_lanes the same way src/lib.rs does,
 // then dispatch the kernel in chunks and read back the found flag each pass.
 
-const WORKGROUP_SIZE = 64;
+const WORKGROUP_SIZE = 256;
 const DEFAULT_DISPATCH_SIZE = 1 << 20; // matches the Rust binary's --global-size default
 
 let device = null;
 let pipeline = null;
-let buffers = null;
-let bindGroup = null;
+let hasTimestamps = false;
 let running = false;
 let stopRequested = false;
 
@@ -152,14 +151,17 @@ async function ensureDevice() {
   }
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
   if (!adapter) throw new Error("No GPU adapter available.");
-  device = await adapter.requestDevice();
+  const requiredFeatures = [];
+  if (adapter.features.has("timestamp-query")) requiredFeatures.push("timestamp-query");
+  device = await adapter.requestDevice({ requiredFeatures });
+  hasTimestamps = device.features.has("timestamp-query");
   device.lost.then((info) => {
     logLine(`device lost: ${info.message}`);
     device = null;
   });
   const info = adapter.info ?? {};
   const desc = [info.vendor, info.architecture, info.device, info.description].filter(Boolean).join(" / ") || "unknown";
-  logLine(`GPU: ${desc}`);
+  logLine(`GPU: ${desc}${hasTimestamps ? "" : " (no timestamp-query support)"}`);
 
   const wgsl = await (await fetch("./kernel.wgsl")).text();
   const module = device.createShaderModule({ code: wgsl });
@@ -169,12 +171,7 @@ async function ensureDevice() {
   });
 }
 
-function createBuffers(baseStateU32, maskLanesU32) {
-  // Uniform buffer: vec4<u32> = 16 bytes. Holds (start_lo, start_hi, max_lo, max_hi).
-  const ctrlBuffer = device.createBuffer({
-    size: 16,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-  });
+function createSharedBuffers(baseStateU32, maskLanesU32) {
   const baseStateBuffer = device.createBuffer({
     size: baseStateU32.byteLength,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
@@ -185,69 +182,99 @@ function createBuffers(baseStateU32, maskLanesU32) {
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
   });
   device.queue.writeBuffer(maskBuffer, 0, maskLanesU32);
-  const foundBuffer = device.createBuffer({
+  return { base: baseStateBuffer, mask: maskBuffer };
+}
+
+// Per-slot buffers + bind group. Two slots are kept so we can submit dispatch
+// N+1 before awaiting dispatch N's mapAsync, which otherwise stalls the GPU.
+function createSlot(shared) {
+  const ctrl = device.createBuffer({
+    size: 16,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+  const found = device.createBuffer({
     size: 4,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
   });
-  const resultBuffer = device.createBuffer({
+  const result = device.createBuffer({
     size: 32,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
   });
-  const foundReadBuffer = device.createBuffer({
+  const foundRead = device.createBuffer({
     size: 4,
     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
   });
-  const resultReadBuffer = device.createBuffer({
+  const resultRead = device.createBuffer({
     size: 32,
     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
   });
-
   const bindGroup = device.createBindGroup({
     layout: pipeline.getBindGroupLayout(0),
     entries: [
-      { binding: 0, resource: { buffer: ctrlBuffer } },
-      { binding: 1, resource: { buffer: baseStateBuffer } },
-      { binding: 2, resource: { buffer: maskBuffer } },
-      { binding: 3, resource: { buffer: foundBuffer } },
-      { binding: 4, resource: { buffer: resultBuffer } },
+      { binding: 0, resource: { buffer: ctrl } },
+      { binding: 1, resource: { buffer: shared.base } },
+      { binding: 2, resource: { buffer: shared.mask } },
+      { binding: 3, resource: { buffer: found } },
+      { binding: 4, resource: { buffer: result } },
     ],
   });
-
-  return {
-    ctrl: ctrlBuffer,
-    base: baseStateBuffer,
-    mask: maskBuffer,
-    found: foundBuffer,
-    result: resultBuffer,
-    foundRead: foundReadBuffer,
-    resultRead: resultReadBuffer,
-    bindGroup,
-  };
+  let querySet = null, queryResolve = null, queryRead = null;
+  if (hasTimestamps) {
+    querySet = device.createQuerySet({ type: "timestamp", count: 2 });
+    queryResolve = device.createBuffer({
+      size: 16,
+      usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+    });
+    queryRead = device.createBuffer({
+      size: 16,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    });
+  }
+  return { ctrl, found, result, foundRead, resultRead, bindGroup, querySet, queryResolve, queryRead, inflight: false, gpuNs: 0n };
 }
 
-async function dispatchOnce(buffers, startLo, startHi, maxLo, maxHi, dispatchSize) {
-  device.queue.writeBuffer(buffers.ctrl, 0, new Uint32Array([startLo, startHi, maxLo, maxHi]));
-  device.queue.writeBuffer(buffers.found, 0, new Uint32Array([0]));
-
+function submitDispatch(slot, startLo, startHi, maxLo, maxHi, dispatchSize) {
+  device.queue.writeBuffer(slot.ctrl, 0, new Uint32Array([startLo, startHi, maxLo, maxHi]));
+  device.queue.writeBuffer(slot.found, 0, new Uint32Array([0]));
   const encoder = device.createCommandEncoder();
-  const pass = encoder.beginComputePass();
+  const passDesc = {};
+  if (slot.querySet) {
+    passDesc.timestampWrites = {
+      querySet: slot.querySet,
+      beginningOfPassWriteIndex: 0,
+      endOfPassWriteIndex: 1,
+    };
+  }
+  const pass = encoder.beginComputePass(passDesc);
   pass.setPipeline(pipeline);
-  pass.setBindGroup(0, buffers.bindGroup);
+  pass.setBindGroup(0, slot.bindGroup);
   pass.dispatchWorkgroups(Math.ceil(dispatchSize / WORKGROUP_SIZE));
   pass.end();
-  encoder.copyBufferToBuffer(buffers.found, 0, buffers.foundRead, 0, 4);
-  encoder.copyBufferToBuffer(buffers.result, 0, buffers.resultRead, 0, 32);
+  if (slot.querySet) {
+    encoder.resolveQuerySet(slot.querySet, 0, 2, slot.queryResolve, 0);
+    encoder.copyBufferToBuffer(slot.queryResolve, 0, slot.queryRead, 0, 16);
+  }
+  encoder.copyBufferToBuffer(slot.found, 0, slot.foundRead, 0, 4);
+  encoder.copyBufferToBuffer(slot.result, 0, slot.resultRead, 0, 32);
   device.queue.submit([encoder.finish()]);
+  slot.inflight = true;
+}
 
-  await buffers.foundRead.mapAsync(GPUMapMode.READ);
-  const foundView = new Uint32Array(buffers.foundRead.getMappedRange().slice(0));
-  const wasFound = foundView[0] !== 0;
-  buffers.foundRead.unmap();
+async function awaitSlot(slot) {
+  await slot.foundRead.mapAsync(GPUMapMode.READ);
+  const found = new Uint32Array(slot.foundRead.getMappedRange().slice(0))[0] !== 0;
+  slot.foundRead.unmap();
+  slot.inflight = false;
+  if (slot.queryRead) {
+    await slot.queryRead.mapAsync(GPUMapMode.READ);
+    const ts = new BigUint64Array(slot.queryRead.getMappedRange().slice(0));
+    slot.gpuNs = ts[1] - ts[0];
+    slot.queryRead.unmap();
+  }
+  if (!found) return null;
 
-  if (!wasFound) return null;
-
-  await buffers.resultRead.mapAsync(GPUMapMode.READ);
-  const r = new Uint32Array(buffers.resultRead.getMappedRange().slice(0));
+  await slot.resultRead.mapAsync(GPUMapMode.READ);
+  const r = new Uint32Array(slot.resultRead.getMappedRange().slice(0));
   const out = {
     saltLo: r[0],
     saltHi: r[1],
@@ -255,7 +282,7 @@ async function dispatchOnce(buffers, startLo, startHi, maxLo, maxHi, dispatchSiz
     a2: [r[4], r[5]],
     a3: [r[6], r[7]],
   };
-  buffers.resultRead.unmap();
+  slot.resultRead.unmap();
   return out;
 }
 
@@ -288,7 +315,8 @@ async function mine() {
 
     const baseState = computeBaseState(deployer, argsHash, initcodeHash);
     const maskLanes = computeLaneMasks(mask, target);
-    buffers = createBuffers(baseState, maskLanes);
+    const shared = createSharedBuffers(baseState, maskLanes);
+    const slots = [createSlot(shared), createSlot(shared)];
 
     logLine(`mining range [0x${minBig.toString(16)}, 0x${maxBig.toString(16)}), dispatch_size ${dispatchSize}`);
     setStatus("mining…");
@@ -298,31 +326,56 @@ async function mine() {
     let cursor = minBig;
     const stepBig = BigInt(dispatchSize);
 
-    while (cursor < maxBig && !stopRequested) {
+    function tryPrime(slot) {
+      if (cursor >= maxBig || stopRequested) return false;
       const startLo = Number(cursor & 0xffffffffn) >>> 0;
       const startHi = Number((cursor >> 32n) & 0xffffffffn) >>> 0;
+      submitDispatch(slot, startLo, startHi, maxLo, maxHi, dispatchSize);
+      cursor += stepBig;
+      return true;
+    }
 
-      const r = await dispatchOnce(buffers, startLo, startHi, maxLo, maxHi, dispatchSize);
+    tryPrime(slots[0]);
+    tryPrime(slots[1]);
+
+    let active = 0;
+    let result = null;
+    while (slots[0].inflight || slots[1].inflight) {
+      const slot = slots[active];
+      if (!slot.inflight) {
+        active = 1 - active;
+        continue;
+      }
+
+      const r = await awaitSlot(slot);
       if (r) {
-        const saltHex = u64ToHex(r.saltLo, r.saltHi).padStart(64, "0");
-        const addr = bytesToHex(addressFromState(r.a1, r.a2, r.a3));
-        $("result").innerHTML =
-          `<div><strong>match</strong></div>` +
-          `<div>salt = 0x${saltHex}</div>` +
-          `<div>home = 0x${addr}</div>`;
-        logLine(`match: salt=0x${saltHex} home=0x${addr}`);
-        setStatus("found");
-        return;
+        result = r;
+        break;
       }
 
       tested += stepBig;
-      cursor += stepBig;
       const elapsed = (performance.now() - started) / 1000;
       const rate = Number(tested) / Math.max(elapsed, 1e-9);
-      setStatus(`tested ${tested.toString()} salts, ${(rate / 1e6).toFixed(2)} MH/s, next 0x${cursor.toString(16)}`);
+      const gpuMs = slot.queryRead ? ` (GPU ${(Number(slot.gpuNs) / 1e6).toFixed(1)} ms/dispatch)` : "";
+      setStatus(`tested ${tested.toString()} salts, ${(rate / 1e6).toFixed(2)} MH/s${gpuMs}, next 0x${cursor.toString(16)}`);
+
+      tryPrime(slot);
+      active = 1 - active;
     }
 
-    if (stopRequested) {
+    if (result) {
+      const saltHex = u64ToHex(result.saltLo, result.saltHi).padStart(64, "0");
+      const addr = bytesToHex(addressFromState(result.a1, result.a2, result.a3));
+      $("result").innerHTML =
+        `<div><strong>match</strong></div>` +
+        `<div>salt = 0x${saltHex}</div>` +
+        `<div>home = 0x${addr}</div>`;
+      logLine(`match: salt=0x${saltHex} home=0x${addr}`);
+      setStatus("found");
+    } else if (stopRequested) {
+      // The drain loop above awaits every still-inflight slot before exiting,
+      // so everything submitted has already been verified. Cursor sits at the
+      // first salt that was never dispatched.
       logLine(`stopped. resume with min=0x${cursor.toString(16)}`);
       setStatus("stopped");
     } else {
