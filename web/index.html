@@ -1,71 +1,137 @@
 <!doctype html>
 <html lang="en">
+
 <head>
-<meta charset="utf-8">
-<title>saltminer (web)</title>
-<style>
-  body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2em auto; padding: 0 1em; }
-  h1 { font-size: 1.4em; margin-bottom: 0.2em; }
-  p.sub { color: #555; margin-top: 0; }
-  label { display: block; margin: 0.6em 0 0.15em; font-weight: 600; font-size: 0.9em; }
-  input[type=text] { width: 100%; font-family: ui-monospace, monospace; font-size: 0.9em; padding: 0.35em; box-sizing: border-box; }
-  .row { display: flex; gap: 0.5em; }
-  .row > div { flex: 1; }
-  .actions { margin-top: 1em; }
-  button { font-size: 1em; padding: 0.4em 1em; margin-right: 0.5em; }
-  #status { margin-top: 1em; font-family: ui-monospace, monospace; min-height: 1.2em; }
-  #result { margin-top: 0.5em; font-family: ui-monospace, monospace; font-size: 0.95em; word-break: break-all; }
-  #log { margin-top: 0.5em; font-family: ui-monospace, monospace; font-size: 0.85em; background: #f4f4f4; padding: 0.5em; height: 7em; overflow: auto; white-space: pre-wrap; }
-</style>
+    <meta charset="utf-8">
+    <title>saltminer (web)</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            max-width: 760px;
+            margin: 2em auto;
+            padding: 0 1em;
+        }
+
+        h1 {
+            font-size: 1.4em;
+            margin-bottom: 0.2em;
+        }
+
+        p.sub {
+            color: #555;
+            margin-top: 0;
+        }
+
+        label {
+            display: block;
+            margin: 0.6em 0 0.15em;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+
+        input[type=text] {
+            width: 100%;
+            font-family: ui-monospace, monospace;
+            font-size: 0.9em;
+            padding: 0.35em;
+            box-sizing: border-box;
+        }
+
+        .row {
+            display: flex;
+            gap: 0.5em;
+        }
+
+        .row>div {
+            flex: 1;
+        }
+
+        .actions {
+            margin-top: 1em;
+        }
+
+        button {
+            font-size: 1em;
+            padding: 0.4em 1em;
+            margin-right: 0.5em;
+        }
+
+        #status {
+            margin-top: 1em;
+            font-family: ui-monospace, monospace;
+            min-height: 1.2em;
+        }
+
+        #result {
+            margin-top: 0.5em;
+            font-family: ui-monospace, monospace;
+            font-size: 0.95em;
+            word-break: break-all;
+        }
+
+        #log {
+            margin-top: 0.5em;
+            font-family: ui-monospace, monospace;
+            font-size: 0.85em;
+            background: #f4f4f4;
+            padding: 0.5em;
+            height: 7em;
+            overflow: auto;
+            white-space: pre-wrap;
+        }
+    </style>
 </head>
+
 <body>
-<h1>saltminer (web)</h1>
-<p class="sub">Searches for an Ethereum contract address that matches a chosen pattern. Runs entirely in your browser on the GPU.</p>
+    <h1>saltminer (web)</h1>
+    <p class="sub">Searches for an Ethereum contract address that matches a chosen pattern. Runs entirely in your
+        browser on the GPU.</p>
 
-<label for="deployer">deployer (20 bytes)</label>
-<input id="deployer" type="text" value="0x4e59b44847b379578588920cA78FbF26c0B4956C">
+    <label for="deployer">deployer (20 bytes)</label>
+    <input id="deployer" type="text" value="0x4e59b44847b379578588920cA78FbF26c0B4956C">
 
-<label for="initcodehash">initcodehash (32 bytes)</label>
-<input id="initcodehash" type="text" value="0x50ea9137a35a9ad33b0ed4a431e9b6996ea9ed1f14781126cec78f168c0e64e5">
+    <label for="initcodehash">initcodehash (32 bytes)</label>
+    <input id="initcodehash" type="text" value="0x50ea9137a35a9ad33b0ed4a431e9b6996ea9ed1f14781126cec78f168c0e64e5">
 
-<label for="argshash">argshash (32 bytes)</label>
-<input id="argshash" type="text" value="0xE396da99091B535B65384914B178b9264c7426da000000000000000000000000">
+    <label for="argshash">argshash (32 bytes)</label>
+    <input id="argshash" type="text" value="0xE396da99091B535B65384914B178b9264c7426da000000000000000000000000">
 
-<div class="row">
-  <div>
-    <label for="mask">mask (20 bytes)</label>
-    <input id="mask" type="text" value="0xffffff00000000000000000000000000000000ff">
-  </div>
-  <div>
-    <label for="target">target (20 bytes)</label>
-    <input id="target" type="text" value="0x3141592653589793238462643383279502884197">
-  </div>
-</div>
+    <div class="row">
+        <div>
+            <label for="mask">mask (20 bytes)</label>
+            <input id="mask" type="text" value="0xffffffffff000000000000000000000000000000">
+        </div>
+        <div>
+            <label for="target">target (20 bytes)</label>
+            <input id="target" type="text" value="0x3141592653589793238462643383279502884197">
+        </div>
+    </div>
 
-<div class="row">
-  <div>
-    <label for="min">min salt</label>
-    <input id="min" type="text" value="0">
-  </div>
-  <div>
-    <label for="max">max salt</label>
-    <input id="max" type="text" value="0xffffffffffffffff">
-  </div>
-  <div>
-    <label for="dispatch">threads / dispatch</label>
-    <input id="dispatch" type="text" value="1048576">
-  </div>
-</div>
+    <div class="row">
+        <div>
+            <label for="min">min salt</label>
+            <input id="min" type="text" value="0">
+        </div>
+        <div>
+            <label for="max">max salt</label>
+            <input id="max" type="text" value="0xffffffffffffffff">
+        </div>
+        <div>
+            <label for="dispatch">threads / dispatch</label>
+            <input id="dispatch" type="text" value="1048576">
+        </div>
+    </div>
 
-<div class="actions">
-  <button id="mine">mine</button>
-  <button id="stop" disabled>stop</button>
-</div>
+    <div class="actions">
+        <button id="mine">mine</button>
+        <button id="stop" disabled>stop</button>
+    </div>
 
-<div id="status"></div>
-<div id="result"></div>
-<div id="log"></div>
+    <div id="status"></div>
+    <div id="result"></div>
+    <div id="log"></div>
 
-<script type="module" src="./saltminer.js"></script>
+    <script type="module" src="./saltminer.js"></script>
 </body>
+
 </html>
