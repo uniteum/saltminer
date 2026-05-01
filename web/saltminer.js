@@ -396,7 +396,32 @@ function stop() {
   stopRequested = true;
 }
 
+const HASH_FIELDS = ["deployer", "initcodehash", "argshash", "mask", "target", "min", "max", "dispatch"];
+
+function applyHashToInputs() {
+  const hash = location.hash.startsWith("#") ? location.hash.slice(1) : location.hash;
+  if (!hash) return;
+  const params = new URLSearchParams(hash);
+  for (const id of HASH_FIELDS) {
+    if (params.has(id)) $(id).value = params.get(id);
+  }
+}
+
+function writeInputsToHash() {
+  const params = new URLSearchParams();
+  for (const id of HASH_FIELDS) params.set(id, $(id).value);
+  // Use replaceState so editing fields doesn't spam history.
+  history.replaceState(null, "", `#${params.toString()}`);
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   $("mine").addEventListener("click", mine);
   $("stop").addEventListener("click", stop);
+
+  applyHashToInputs();
+  writeInputsToHash();
+  for (const id of HASH_FIELDS) {
+    $(id).addEventListener("input", writeInputsToHash);
+  }
+  window.addEventListener("hashchange", applyHashToInputs);
 });
