@@ -28,7 +28,7 @@ saltminer --shard 0/2 --device 0:0  ...
 saltminer --shard 1/2 --device 0:1  ...
 ```
 
-`saltminer --list-devices` to find the indices.
+`saltminer --listdevices` to find the indices.
 
 ## Everything else
 

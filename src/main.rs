@@ -18,10 +18,10 @@ const KERNEL_SRC: &str = include_str!("kernel.cl");
 )]
 struct Args {
     /// List available OpenCL platforms and devices and exit.
-    #[arg(long)]
+    #[arg(long = "listdevices")]
     list_devices: bool,
 
-    /// OpenCL device, as platform_index:device_index (see --list-devices).
+    /// OpenCL device, as platform_index:device_index (see --listdevices).
     #[arg(long, default_value = "0:0")]
     device: String,
 
@@ -58,7 +58,7 @@ struct Args {
     shard: String,
 
     /// Threads per kernel dispatch.
-    #[arg(long = "global-size", default_value_t = 1 << 20)]
+    #[arg(long = "dispatch", default_value_t = 1 << 20)]
     global_size: usize,
 }
 
@@ -127,7 +127,7 @@ fn main() -> Result<()> {
     }
     let global_size = args.global_size;
     if global_size == 0 {
-        bail!("--global-size must be > 0");
+        bail!("--dispatch must be > 0");
     }
 
     let (platform, device) = select_device(&args.device)?;

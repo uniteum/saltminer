@@ -164,7 +164,7 @@ These knobs affect throughput only. The salt assignment math (`salt = start_salt
 
 ### Device selection and multi-GPU hosts
 
-`saltminer` targets one OpenCL device per worker process, selected with a `--device` flag (platform index + device index, listed via `--list-devices`). A host with two GPUs runs two worker processes, each with its own `--device` and its own `--shard w/N`. Simple, crash-isolates one GPU from the other, and uses exactly the same sharding mechanism as multi-machine deployments.
+`saltminer` targets one OpenCL device per worker process, selected with a `--device` flag (platform index + device index, listed via `--listdevices`). A host with two GPUs runs two worker processes, each with its own `--device` and its own `--shard w/N`. Simple, crash-isolates one GPU from the other, and uses exactly the same sharding mechanism as multi-machine deployments.
 
 A single-process multi-GPU mode (one command queue per device inside one binary) is **out of scope for v1** — it adds context-management and signal-handling complexity without changing the search itself. If it turns out to be useful later, it can be layered on without touching the kernel or the sharding math.
 
@@ -268,7 +268,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 sudo apt-get install ocl-icd-opencl-dev    # loader + headers (link-time)
 sudo apt-get install intel-opencl-icd      # or nvidia driver, or rocm-opencl-runtime, or pocl-opencl-icd for CPU fallback
 cargo build --release
-cargo run --release -- --list-devices      # should show at least one device
+cargo run --release -- --listdevices       # should show at least one device
 ```
 
 `cargo test --lib` covers the lane-packing and address math without needing any OpenCL library at all.

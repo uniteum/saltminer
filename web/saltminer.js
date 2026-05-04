@@ -3,7 +3,7 @@
 // then dispatch the kernel in chunks and read back the found flag each pass.
 
 const WORKGROUP_SIZE = 256;
-const DEFAULT_DISPATCH_SIZE = 1 << 20; // matches the Rust binary's --global-size default
+const DEFAULT_DISPATCH_SIZE = 1 << 20; // matches the Rust binary's --dispatch default
 
 let device = null;
 let pipeline = null;
