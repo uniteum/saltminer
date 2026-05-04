@@ -1,0 +1,12 @@
+{
+  "name": "saltminer-node",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "saltminer": "./saltminer.js"
+  },
+  "dependencies": {
+    "@kmamal/gpu": "^0.2.1"
+  }
+}
